@@ -1,0 +1,85 @@
+import type { User } from "./models/user.js";
+import { QUERY_GET_FEATURES, type FeaturesResponse } from "./queries.js";
+
+const { AHA_API_TOKEN, AHA_DOMAIN } = process.env;
+
+if (!AHA_API_TOKEN) throw new Error("Missing required environment variable: AHA_API_TOKEN");
+if (!AHA_DOMAIN) throw new Error("Missing required environment variable: AHA_DOMAIN");
+
+const BASE_URL = `https://${AHA_DOMAIN}.aha.io`;
+const GRAPHQL_URL = `${BASE_URL}/api/v2/graphql`;
+
+const AUTH_HEADERS = {
+  Authorization: `Bearer ${AHA_API_TOKEN}`,
+  "Content-Type": "application/json",
+};
+
+// ─── Cached current user ──────────────────────────────────────────────────────
+
+let cachedMe: User | null = null;
+
+// ─── Core HTTP functions ──────────────────────────────────────────────────────
+
+export async function graphql<T>(query: string, variables: Record<string, unknown> = {}): Promise<T> {
+  const response = await fetch(GRAPHQL_URL, {
+    method: "POST",
+    headers: AUTH_HEADERS,
+    body: JSON.stringify({ query, variables }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Aha! API error: ${response.status} ${response.statusText}`);
+  }
+
+  const json = (await response.json()) as { data?: T; errors?: { message: string }[] };
+
+  if (json.errors && json.errors.length > 0) {
+    throw new Error(`GraphQL error: ${json.errors[0].message}`);
+  }
+
+  if (!json.data) {
+    throw new Error("GraphQL response contained no data");
+  }
+
+  return json.data;
+}
+
+async function restGet<T>(path: string): Promise<T> {
+  const response = await fetch(`${BASE_URL}${path}`, {
+    headers: AUTH_HEADERS,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Aha! REST API error: ${response.status} ${response.statusText}`);
+  }
+
+  return response.json() as Promise<T>;
+}
+
+// ─── User helpers ─────────────────────────────────────────────────────────────
+
+export async function getCurrentUser(): Promise<User> {
+  if (cachedMe) return cachedMe;
+
+  const data = await restGet<{ user: User }>("/api/v1/me");
+  cachedMe = data.user;
+  return cachedMe;
+}
+
+/**
+ * Resolves a feature reference number (e.g. "DEV-123") to its opaque internal ID.
+ * If the input doesn't look like a reference number (no hyphen), returns it as-is.
+ */
+export async function resolveFeatureId(refOrId: string): Promise<string> {
+  // Reference numbers contain a hyphen (e.g. DEV-123); opaque IDs don't
+  if (!refOrId.includes("-")) return refOrId;
+
+  const data = await graphql<FeaturesResponse>(QUERY_GET_FEATURES, {
+    filters: { id: [refOrId] },
+    per: 1,
+  });
+
+  const feature = data.features.nodes[0];
+  if (!feature) throw new Error(`Feature not found: ${refOrId}`);
+  return feature.id;
+}
