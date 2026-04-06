@@ -24,7 +24,7 @@ Add to your `claude_desktop_config.json`:
   "mcpServers": {
     "aha": {
       "command": "bunx",
-      "args": ["aha-mcp"],
+      "args": ["@goolyio_k/aha-mcp"],
       "env": {
         "AHA_API_TOKEN": "your_api_token",
         "AHA_DOMAIN": "yourcompany"
