@@ -32,12 +32,18 @@ jobs:
       - name: Type check
         run: bun x tsc --noEmit
 
-      - name: Bump patch version
-        run: npm version patch --no-git-tag-version
-
-      - name: Get new version
+      - name: Bump patch version (skip already-tagged versions)
         id: pkg
-        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+        run: |
+          while true; do
+            npm version patch --no-git-tag-version
+            VERSION=$(node -p "require('./package.json').version")
+            if ! git ls-remote --tags origin "refs/tags/v${VERSION}" | grep -q .; then
+              break
+            fi
+            echo "Tag v${VERSION} already exists, bumping again..."
+          done
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
       - name: Commit and tag version bump
         run: |
