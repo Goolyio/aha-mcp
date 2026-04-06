@@ -10,7 +10,7 @@ An MCP (Model Context Protocol) server for [Aha!](https://www.aha.io) focused on
 
 ## Installation
 
-Requires [Bun](https://bun.sh) v1.0+.
+Requires Node.js 18+ or Bun 1.0+.
 
 ### Claude Desktop (recommended)
 
@@ -23,8 +23,8 @@ Add to your `claude_desktop_config.json`:
 {
   "mcpServers": {
     "aha": {
-      "command": "bunx",
-      "args": ["@goolyio_k/aha-mcp"],
+      "command": "npx",
+      "args": ["-y", "@goolyio_k/aha-mcp"],
       "env": {
         "AHA_API_TOKEN": "your_api_token",
         "AHA_DOMAIN": "yourcompany"
@@ -41,7 +41,7 @@ Restart Claude Desktop — the Aha! tools will appear automatically.
 Any client that supports the MCP stdio transport can run:
 
 ```bash
-bunx aha-mcp
+npx @goolyio_k/aha-mcp
 ```
 
 with `AHA_API_TOKEN` and `AHA_DOMAIN` set in the environment.
