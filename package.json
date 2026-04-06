@@ -14,7 +14,7 @@
     "node": ">=18.0.0"
   },
   "scripts": {
-    "build": "bun build src/index.ts --outfile dist/index.js --target node",
+    "build": "bun build src/index.ts --outfile dist/index.js --target node && node -e \"const fs=require('fs'),c=fs.readFileSync('dist/index.js','utf8');fs.writeFileSync('dist/index.js','#!/usr/bin/env node\\n'+c)\"",
     "prepare": "bun run build",
     "start": "bun run src/index.ts",
     "dev": "bun --watch src/index.ts"
