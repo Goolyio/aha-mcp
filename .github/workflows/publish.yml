@@ -14,12 +14,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # Use a PAT or the default token — needs push access
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+
+      # setup-node handles .npmrc auth config when registry-url is set
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
