@@ -1,7 +1,8 @@
+import type { Comment } from "./models/comment.js";
+import type { Page } from "./models/common.js";
 import type { Feature } from "./models/feature.js";
 import type { Iteration } from "./models/iteration.js";
 import type { Project } from "./models/project.js";
-import type { Page } from "./models/common.js";
 
 // ─── Status Constants ───────────────────────────────────────────────────────
 
@@ -47,6 +48,10 @@ export interface CreateCommentResponse {
 
 export interface CreateFeatureResponse {
   createFeature: { feature: Pick<Feature, "id" | "referenceNum" | "path"> };
+}
+
+export interface FeatureCommentsResponse {
+  features: { nodes: { referenceNum: string; comments: Comment[] }[] };
 }
 
 // ─── Feature Fragment ────────────────────────────────────────────────────────
@@ -145,6 +150,23 @@ export const QUERY_SEARCH_DOCUMENTS = `
         searchableType
         url
         project { id name referencePrefix }
+      }
+    }
+  }
+`;
+
+export const QUERY_GET_FEATURE_COMMENTS = `
+  query GetFeatureComments($filters: FeatureFilters!) {
+    features(filters: $filters, per: 1) {
+      nodes {
+        referenceNum
+        comments {
+          id
+          body
+          user { id name email }
+          createdAt
+          updatedAt
+        }
       }
     }
   }

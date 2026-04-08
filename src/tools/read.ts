@@ -1,20 +1,22 @@
-import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { graphql, getCurrentUser } from "../client.js";
-import {
-  ITERATION_STATUS,
-  QUERY_GET_FEATURES,
-  QUERY_LIST_ITERATIONS,
-  QUERY_LIST_PROJECTS,
-  QUERY_SEARCH_DOCUMENTS,
-  type FeaturesResponse,
-  type IterationsResponse,
-  type ProjectsResponse,
-  type SearchDocumentsResponse,
-} from "../queries.js";
+import { z } from "zod";
+import { getCurrentUser, graphql } from "../client.js";
 import type { Feature } from "../models/feature.js";
 import type { Iteration } from "../models/iteration.js";
 import type { Project } from "../models/project.js";
+import {
+    ITERATION_STATUS,
+    QUERY_GET_FEATURES,
+    QUERY_GET_FEATURE_COMMENTS,
+    QUERY_LIST_ITERATIONS,
+    QUERY_LIST_PROJECTS,
+    QUERY_SEARCH_DOCUMENTS,
+    type FeatureCommentsResponse,
+    type FeaturesResponse,
+    type IterationsResponse,
+    type ProjectsResponse,
+    type SearchDocumentsResponse,
+} from "../queries.js";
 
 // ─── Formatting helpers ───────────────────────────────────────────────────────
 
@@ -469,6 +471,50 @@ export function registerReadTools(server: McpServer): void {
 
         const header = `Found ${searchData.searchDocuments.totalCount} result(s) for "${query}":`;
         const rows = features.map((f) => formatFeature(f, DOMAIN));
+
+        return { content: [{ type: "text", text: [header, ...rows].join("\n\n---\n\n") }] };
+      } catch (e) {
+        return { isError: true, content: [{ type: "text", text: String(e) }] };
+      }
+    }
+  );
+
+  // ── get_feature_comments ─────────────────────────────────────────────────────
+  server.registerTool(
+    "get_feature_comments",
+    {
+      description:
+        "Get all comments on an Aha! feature by its reference number (e.g. DEV-123). Returns comment body, author, and timestamps.",
+      inputSchema: {
+        referenceNum: z.string().describe("Feature reference number, e.g. DEV-123"),
+      },
+      annotations: READ_ANNOTATIONS,
+    },
+    async ({ referenceNum }) => {
+      try {
+        const data = await graphql<FeatureCommentsResponse>(QUERY_GET_FEATURE_COMMENTS, {
+          filters: { id: [referenceNum] },
+        });
+
+        const feature = data.features.nodes[0];
+        if (!feature) {
+          return { content: [{ type: "text", text: `Feature not found: ${referenceNum}` }] };
+        }
+
+        const comments = feature.comments;
+        if (comments.length === 0) {
+          return { content: [{ type: "text", text: `No comments on ${referenceNum}.` }] };
+        }
+
+        const header = `**${referenceNum}** — ${comments.length} comment${comments.length !== 1 ? "s" : ""}:`;
+        const rows = comments.map((c) => {
+          const bodyPreview =
+            c.body.length > 500 ? c.body.slice(0, 500).trimEnd() + "…" : c.body;
+          return [
+            `**${c.user.name}** <${c.user.email}> · ${c.createdAt}`,
+            bodyPreview,
+          ].join("\n");
+        });
 
         return { content: [{ type: "text", text: [header, ...rows].join("\n\n---\n\n") }] };
       } catch (e) {
