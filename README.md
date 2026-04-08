@@ -69,6 +69,7 @@ with `AHA_API_TOKEN` and `AHA_DOMAIN` set in the environment.
 | `list_iterations` | List sprints for a project, filterable by status (PLANNING / ACTIVE / COMPLETE). |
 | `list_features` | Flexible feature querying — filter by project, user, sprint, status, or any combination. |
 | `get_feature` | Full detail on a single feature by reference number, e.g. `DAI-1048`. |
+| `get_feature_comments` | Get all comments on a feature by reference number. |
 | `search_features` | Full-text search across features. |
 
 ### Write tools ⚠️
