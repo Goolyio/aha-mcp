@@ -64,6 +64,7 @@ with `AHA_API_TOKEN` and `AHA_DOMAIN` set in the environment.
 | Tool | Description |
 |---|---|
 | `get_my_sprint_tickets` | **Start here.** All features assigned to you in active sprint(s), grouped by project. |
+| `get_my_features` | All features assigned to you across all projects, with optional filters. |
 | `get_me` | Who am I — resolves the authenticated user's name, email, and ID. |
 | `list_projects` | List all Aha! workspaces/projects you have access to. |
 | `list_iterations` | List sprints for a project, filterable by status (PLANNING / ACTIVE / COMPLETE). |

@@ -5,17 +5,17 @@ import type { Feature } from "../models/feature.js";
 import type { Iteration } from "../models/iteration.js";
 import type { Project } from "../models/project.js";
 import {
-    ITERATION_STATUS,
-    QUERY_GET_FEATURES,
-    QUERY_GET_FEATURE_COMMENTS,
-    QUERY_LIST_ITERATIONS,
-    QUERY_LIST_PROJECTS,
-    QUERY_SEARCH_DOCUMENTS,
-    type FeatureCommentsResponse,
-    type FeaturesResponse,
-    type IterationsResponse,
-    type ProjectsResponse,
-    type SearchDocumentsResponse,
+  ITERATION_STATUS,
+  QUERY_GET_FEATURES,
+  QUERY_GET_FEATURE_COMMENTS,
+  QUERY_LIST_ITERATIONS,
+  QUERY_LIST_PROJECTS,
+  QUERY_SEARCH_DOCUMENTS,
+  type FeatureCommentsResponse,
+  type FeaturesResponse,
+  type IterationsResponse,
+  type ProjectsResponse,
+  type SearchDocumentsResponse,
 } from "../queries.js";
 
 // ─── Formatting helpers ───────────────────────────────────────────────────────
@@ -473,6 +473,120 @@ export function registerReadTools(server: McpServer): void {
         const rows = features.map((f) => formatFeature(f, DOMAIN));
 
         return { content: [{ type: "text", text: [header, ...rows].join("\n\n---\n\n") }] };
+      } catch (e) {
+        return { isError: true, content: [{ type: "text", text: String(e) }] };
+      }
+    }
+  );
+
+  // ── get_my_features ──────────────────────────────────────────────────────────
+  server.registerTool(
+    "get_my_features",
+    {
+      description:
+        "Get all Aha! features assigned to you, across all projects and sprints. Supports optional filters by project, status, and pagination. Unlike get_my_sprint_tickets, this includes work outside active sprints.",
+      inputSchema: {
+        projectId: z.string().optional().describe("Scope to a specific project. Get IDs from list_projects."),
+        workflowMeaning: z
+          .enum(["NOT_STARTED", "IN_PROGRESS", "DONE", "SHIPPED", "WONT_DO", "ALREADY_EXISTS"])
+          .optional()
+          .describe("Filter by workflow status meaning"),
+        page: z.number().int().min(1).default(1).optional().describe("Page number (default 1)"),
+        per: z.number().int().min(1).max(100).default(30).optional().describe("Results per page (default 30)"),
+      },
+      annotations: READ_ANNOTATIONS,
+    },
+    async ({ projectId, workflowMeaning, page = 1, per = 30 }) => {
+      try {
+        const me = await getCurrentUser();
+
+        // The Aha! API requires a projectId (or similar scope) on feature queries.
+        // When no projectId is provided, enumerate all projects and fan out.
+        if (!projectId) {
+          const projectsData = await graphql<ProjectsResponse>(QUERY_LIST_PROJECTS, { per: 200 });
+          const projects: Project[] = projectsData.projects.nodes;
+
+          const featureBatches = await Promise.all(
+            chunk(projects, 5).map((batch) =>
+              Promise.all(
+                batch.map(async (p) => {
+                  const filters: Record<string, unknown> = {
+                    projectId: p.id,
+                    assignedToUserId: me.id,
+                  };
+                  if (workflowMeaning) filters.workflowMeaning = [workflowMeaning];
+
+                  // Paginate through all pages for each project
+                  const allNodes: Feature[] = [];
+                  let currentPage = 1;
+                  let isLast = false;
+                  while (!isLast) {
+                    try {
+                      const d = await graphql<FeaturesResponse>(QUERY_GET_FEATURES, {
+                        filters,
+                        page: currentPage,
+                        per: 100,
+                      });
+                      allNodes.push(...d.features.nodes);
+                      isLast = d.features.isLastPage;
+                      currentPage++;
+                    } catch {
+                      break;
+                    }
+                  }
+                  return allNodes;
+                })
+              )
+            )
+          );
+
+          const seen = new Set<string>();
+          const allFeatures: Feature[] = featureBatches.flat(2).filter((f) => {
+            if (seen.has(f.id)) return false;
+            seen.add(f.id);
+            return true;
+          });
+
+          if (allFeatures.length === 0) {
+            return { content: [{ type: "text", text: `No features assigned to ${me.name}.` }] };
+          }
+
+          const header = `## Features assigned to ${me.name} (${allFeatures.length} feature${allFeatures.length !== 1 ? "s" : ""} across ${new Set(allFeatures.map((f) => f.project.id)).size} project${new Set(allFeatures.map((f) => f.project.id)).size !== 1 ? "s" : ""}):`;
+          const byProject = groupByProject(allFeatures);
+          const lines: string[] = [header];
+
+          for (const [projectLabel, projectFeatures] of byProject) {
+            lines.push(`\n### ${projectLabel}`);
+            for (const f of projectFeatures) {
+              lines.push(`\n${formatFeature(f, DOMAIN)}`);
+            }
+          }
+
+          return { content: [{ type: "text", text: lines.join("\n") }] };
+        }
+
+        const filters: Record<string, unknown> = { assignedToUserId: me.id, projectId };
+        if (workflowMeaning) filters.workflowMeaning = [workflowMeaning];
+
+        const data = await graphql<FeaturesResponse>(QUERY_GET_FEATURES, { filters, page, per });
+        const features: Feature[] = data.features.nodes;
+
+        if (features.length === 0) {
+          return { content: [{ type: "text", text: `No features assigned to ${me.name}.` }] };
+        }
+
+        const header = `## Features assigned to ${me.name} (${data.features.totalCount} total, page ${data.features.currentPage}${data.features.isLastPage ? ", last page" : ""}):`;
+        const byProject = groupByProject(features);
+        const lines: string[] = [header];
+
+        for (const [projectLabel, projectFeatures] of byProject) {
+          lines.push(`\n### ${projectLabel}`);
+          for (const f of projectFeatures) {
+            lines.push(`\n${formatFeature(f, DOMAIN)}`);
+          }
+        }
+
+        return { content: [{ type: "text", text: lines.join("\n") }] };
       } catch (e) {
         return { isError: true, content: [{ type: "text", text: String(e) }] };
       }
