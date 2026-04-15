@@ -72,6 +72,8 @@ with `AHA_API_TOKEN` and `AHA_DOMAIN` set in the environment.
 | `get_feature` | Full detail on a single feature by reference number, e.g. `DAI-1048`. |
 | `get_feature_comments` | Get all comments on a feature by reference number. |
 | `search_features` | Full-text search across features. |
+| `list_notes` | List notes (knowledge base pages) for a product/project. |
+| `get_note` | Full detail and body of a single note by ID or reference number. |
 
 ### Write tools ⚠️
 
@@ -82,6 +84,8 @@ These modify data in Aha! and are clearly marked so your AI assistant treats the
 | `update_feature_status` | Change a feature's workflow status. |
 | `add_feature_comment` | Post a comment on a feature. |
 | `create_feature` | Create a new feature in a project. |
+| `create_note` | Create a new note (knowledge base page) in a product. |
+| `update_note` | Update an existing note's title, body, or parent folder. |
 
 ---
 
@@ -95,6 +99,9 @@ Once connected, try asking Claude:
 - *"Search for tickets about jailbreak"*
 - *"What sprints are active in the AI Team project?"*
 - *"Add a comment to DAI-1007 saying I've started investigating"* ⚠️
+- *"List all notes in the DAI project"*
+- *"Show me the content of note DAI-N-5"*
+- *"Create a note in DAI called 'Architecture Decision: Auth Flow'"* ⚠️
 
 ---
 
@@ -107,6 +114,7 @@ src/
 ├── queries.ts       # All GraphQL query/mutation strings
 ├── models/          # TypeScript interfaces for Aha! domain models
 │   ├── common.ts    # Note, PageInfo, Tag, Estimate
+│   ├── page.ts      # AhaPage (knowledge base note — REST API)
 │   ├── user.ts      # User
 │   ├── workflow.ts  # WorkflowStatus, InternalMeaning enum
 │   ├── project.ts   # Project

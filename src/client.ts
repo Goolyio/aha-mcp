@@ -44,9 +44,37 @@ export async function graphql<T>(query: string, variables: Record<string, unknow
   return json.data;
 }
 
-async function restGet<T>(path: string): Promise<T> {
+export async function restGet<T>(path: string): Promise<T> {
   const response = await fetch(`${BASE_URL}${path}`, {
     headers: AUTH_HEADERS,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Aha! REST API error: ${response.status} ${response.statusText}`);
+  }
+
+  return response.json() as Promise<T>;
+}
+
+export async function restPost<T>(path: string, body: Record<string, unknown>): Promise<T> {
+  const response = await fetch(`${BASE_URL}${path}`, {
+    method: "POST",
+    headers: AUTH_HEADERS,
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Aha! REST API error: ${response.status} ${response.statusText}`);
+  }
+
+  return response.json() as Promise<T>;
+}
+
+export async function restPut<T>(path: string, body: Record<string, unknown>): Promise<T> {
+  const response = await fetch(`${BASE_URL}${path}`, {
+    method: "PUT",
+    headers: AUTH_HEADERS,
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {

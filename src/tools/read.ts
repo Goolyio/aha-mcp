@@ -1,21 +1,22 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getCurrentUser, graphql } from "../client.js";
+import { getCurrentUser, graphql, restGet } from "../client.js";
 import type { Feature } from "../models/feature.js";
 import type { Iteration } from "../models/iteration.js";
+import type { AhaPage } from "../models/page.js";
 import type { Project } from "../models/project.js";
 import {
-  ITERATION_STATUS,
-  QUERY_GET_FEATURES,
-  QUERY_GET_FEATURE_COMMENTS,
-  QUERY_LIST_ITERATIONS,
-  QUERY_LIST_PROJECTS,
-  QUERY_SEARCH_DOCUMENTS,
-  type FeatureCommentsResponse,
-  type FeaturesResponse,
-  type IterationsResponse,
-  type ProjectsResponse,
-  type SearchDocumentsResponse,
+    ITERATION_STATUS,
+    QUERY_GET_FEATURES,
+    QUERY_GET_FEATURE_COMMENTS,
+    QUERY_LIST_ITERATIONS,
+    QUERY_LIST_PROJECTS,
+    QUERY_SEARCH_DOCUMENTS,
+    type FeatureCommentsResponse,
+    type FeaturesResponse,
+    type IterationsResponse,
+    type ProjectsResponse,
+    type SearchDocumentsResponse,
 } from "../queries.js";
 
 // ─── Formatting helpers ───────────────────────────────────────────────────────
@@ -631,6 +632,87 @@ export function registerReadTools(server: McpServer): void {
         });
 
         return { content: [{ type: "text", text: [header, ...rows].join("\n\n---\n\n") }] };
+      } catch (e) {
+        return { isError: true, content: [{ type: "text", text: String(e) }] };
+      }
+    }
+  );
+
+  // ── list_notes ───────────────────────────────────────────────────────────────
+  server.registerTool(
+    "list_notes",
+    {
+      description:
+        "List notes (knowledge base pages) for an Aha! product/project. Uses the project's reference prefix (e.g. 'DAI') or numeric ID.",
+      inputSchema: {
+        productId: z
+          .string()
+          .describe("Product reference prefix (e.g. 'DAI') or numeric product ID"),
+        page: z.number().int().min(1).default(1).optional().describe("Page number (default 1)"),
+        per_page: z.number().int().min(1).max(200).default(30).optional().describe("Results per page (default 30)"),
+      },
+      annotations: READ_ANNOTATIONS,
+    },
+    async ({ productId, page = 1, per_page = 30 }) => {
+      try {
+        const data = await restGet<{ pages: AhaPage[]; pagination: { total_records: number; current_page: number } }>(
+          `/api/v1/products/${encodeURIComponent(productId)}/pages?page=${page}&per_page=${per_page}`
+        );
+
+        const pages = data.pages;
+        if (!pages || pages.length === 0) {
+          return { content: [{ type: "text", text: "No notes found." }] };
+        }
+
+        const header = `Found ${data.pagination.total_records} note(s) (page ${data.pagination.current_page}):`;
+        const rows = pages.map((p) => {
+          const status = p.workflow_status ? ` · ${p.workflow_status.name}` : "";
+          const parent = p.parent_id ? ` (parent: ${p.parent_id})` : "";
+          return `• **${p.reference_num}** ${p.name}${status}${parent}\n  ID: ${p.id}\n  ${p.url}`;
+        });
+
+        return { content: [{ type: "text", text: [header, ...rows].join("\n\n") }] };
+      } catch (e) {
+        return { isError: true, content: [{ type: "text", text: String(e) }] };
+      }
+    }
+  );
+
+  // ── get_note ─────────────────────────────────────────────────────────────────
+  server.registerTool(
+    "get_note",
+    {
+      description:
+        "Get full details and body of a single Aha! note by its numeric ID or reference number (e.g. PRJ1-N-11).",
+      inputSchema: {
+        noteId: z.string().describe("Numeric ID or reference number of the note (e.g. PRJ1-N-11)"),
+      },
+      annotations: READ_ANNOTATIONS,
+    },
+    async ({ noteId }) => {
+      try {
+        const data = await restGet<{ page: AhaPage }>(`/api/v1/pages/${encodeURIComponent(noteId)}`);
+        const p = data.page;
+
+        const body = p.description?.body ?? "(no content)";
+        const tags = p.tags?.length ? p.tags.map((t) => t.name).join(", ") : "none";
+        const status = p.workflow_status ? `${p.workflow_status.name}` : "none";
+
+        const lines = [
+          `# ${p.reference_num}: ${p.name}`,
+          `**Status:** ${status}`,
+          `**Tags:** ${tags}`,
+          `**Created:** ${p.created_at}`,
+          `**Updated:** ${p.updated_at}`,
+          `**Comments:** ${p.comments_count}`,
+          p.parent_id ? `**Parent ID:** ${p.parent_id}` : null,
+          `**URL:** ${p.url}`,
+          "",
+          "## Content",
+          body,
+        ].filter((l): l is string => l !== null);
+
+        return { content: [{ type: "text", text: lines.join("\n") }] };
       } catch (e) {
         return { isError: true, content: [{ type: "text", text: String(e) }] };
       }
