@@ -1,14 +1,14 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { graphql, resolveFeatureId, restPost, restPut } from "../client.js";
+import { graphql, resolveFeatureId, resolveReleaseId, restPost, restPut } from "../client.js";
 import type { AhaPage } from "../models/page.js";
 import {
-    MUTATION_ADD_COMMENT,
-    MUTATION_CREATE_FEATURE,
-    MUTATION_UPDATE_FEATURE,
-    type CreateCommentResponse,
-    type CreateFeatureResponse,
-    type UpdateFeatureResponse,
+  MUTATION_ADD_COMMENT,
+  MUTATION_CREATE_FEATURE,
+  MUTATION_UPDATE_FEATURE,
+  type CreateCommentResponse,
+  type CreateFeatureResponse,
+  type UpdateFeatureResponse,
 } from "../queries.js";
 
 // ─── Write tool annotations ───────────────────────────────────────────────────
@@ -121,7 +121,10 @@ export function registerWriteTools(server: McpServer): void {
     },
     async ({ projectId, name, releaseId, assignedToUserId, description }) => {
       try {
-        const variables: Record<string, unknown> = { name, projectId, releaseId };
+        // Resolve release reference (e.g. "DAI-R-3") to internal ID,
+        // validating it belongs to the target project
+        const resolvedReleaseId = await resolveReleaseId(releaseId, projectId);
+        const variables: Record<string, unknown> = { name, projectId, releaseId: resolvedReleaseId };
         if (assignedToUserId) variables.assignedToUserId = assignedToUserId;
         if (description) variables.description = description;
 

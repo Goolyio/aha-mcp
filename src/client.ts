@@ -111,3 +111,31 @@ export async function resolveFeatureId(refOrId: string): Promise<string> {
   if (!feature) throw new Error(`Feature not found: ${refOrId}`);
   return feature.id;
 }
+
+/**
+ * Resolves a release reference number (e.g. "DAI-R-3") to its opaque internal ID.
+ * Validates that the release belongs to the given project by fetching the project's releases.
+ * If the input doesn't look like a reference number (no hyphen), returns it as-is.
+ */
+export async function resolveReleaseId(releaseRef: string, projectId: string): Promise<string> {
+  // If it looks like a numeric/opaque ID (no hyphen), return as-is
+  if (!releaseRef.includes("-")) return releaseRef;
+
+  // Fetch releases for the project via REST API
+  const data = await restGet<{ releases: Array<{ id: string; reference_num: string; name: string }> }>(
+    `/api/v1/products/${projectId}/releases`
+  );
+
+  const match = data.releases.find(
+    (r) => r.reference_num.toLowerCase() === releaseRef.toLowerCase()
+  );
+
+  if (!match) {
+    const available = data.releases.map((r) => `${r.reference_num} (${r.name})`).join(", ");
+    throw new Error(
+      `Release '${releaseRef}' not found in project '${projectId}'. Available releases: ${available}`
+    );
+  }
+
+  return match.id;
+}
